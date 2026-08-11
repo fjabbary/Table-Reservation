@@ -10,3 +10,6 @@ export const OPENING_HOUR = 11;
 
 /** Restaurant closing hour (24h, local time) — last reservation must end by then. */
 export const CLOSING_HOUR = 22;
+
+/** Sanity cap on a single reservation's party size; larger groups should call in. */
+export const MAX_PARTY_SIZE = 20;
