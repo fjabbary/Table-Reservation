@@ -141,6 +141,33 @@ export function validateSearchInput(
 }
 
 /**
+ * Of the given table ids, returns the subset that have a reservation
+ * overlapping [start, end). Shared by `findAvailableTables` (many tables at
+ * once) and `isTableAvailable` (a single table, e.g. on the detail page).
+ */
+async function getConflictedTableIds(
+  tableIds: string[],
+  { start, end }: Pick<ValidatedSearch, "start" | "end">,
+  client: Pick<PrismaClient, "reservation">
+): Promise<Set<string>> {
+  if (tableIds.length === 0) return new Set();
+
+  // Any existing reservation whose [start, start+duration) window could
+  // possibly overlap ours starts somewhere in (requestedStart - duration, requestedEnd).
+  const conflictWindowStart = new Date(
+    start.getTime() - RESERVATION_DURATION_MINUTES * 60_000
+  );
+  const conflicts = await client.reservation.findMany({
+    where: {
+      tableId: { in: tableIds },
+      startTime: { gt: conflictWindowStart, lt: end },
+    },
+    select: { tableId: true },
+  });
+  return new Set(conflicts.map((r) => r.tableId));
+}
+
+/**
  * Finds tables that fit the party and have no overlapping reservation in the
  * requested window. Takes an already-validated search — call
  * `validateSearchInput` first. `client` is injectable so tests can point this
@@ -160,19 +187,25 @@ export async function findAvailableTables(
 
   if (candidates.length === 0) return [];
 
-  // Any existing reservation whose [start, start+duration) window could
-  // possibly overlap ours starts somewhere in (requestedStart - duration, requestedEnd).
-  const conflictWindowStart = new Date(
-    start.getTime() - RESERVATION_DURATION_MINUTES * 60_000
+  const conflictedTableIds = await getConflictedTableIds(
+    candidates.map((t) => t.id),
+    { start, end },
+    client
   );
-  const conflicts = await client.reservation.findMany({
-    where: {
-      tableId: { in: candidates.map((t) => t.id) },
-      startTime: { gt: conflictWindowStart, lt: end },
-    },
-    select: { tableId: true },
-  });
-  const conflictedTableIds = new Set(conflicts.map((r) => r.tableId));
 
   return candidates.filter((table) => !conflictedTableIds.has(table.id));
+}
+
+/**
+ * Whether a specific table is free for [start, end) — used to re-check a
+ * single table (e.g. on its detail page, or right before creating a
+ * reservation) without re-running the full search.
+ */
+export async function isTableAvailable(
+  tableId: string,
+  window: Pick<ValidatedSearch, "start" | "end">,
+  client: Pick<PrismaClient, "reservation"> = db
+): Promise<boolean> {
+  const conflicted = await getConflictedTableIds([tableId], window, client);
+  return !conflicted.has(tableId);
 }

@@ -2,7 +2,12 @@ import { execSync } from "node:child_process";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient, TableLocation } from "@/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
-import { combineDateAndTime, findAvailableTables, validateSearchInput } from "./availability";
+import {
+  combineDateAndTime,
+  findAvailableTables,
+  isTableAvailable,
+  validateSearchInput,
+} from "./availability";
 
 // Isolated SQLite file for this test run, separate from the real dev.db —
 // pushed fresh from the current schema, then wiped between tests.
@@ -252,5 +257,46 @@ describe("findAvailableTables", () => {
     );
 
     expect(results.map((t) => t.id)).toEqual([tableA.id]);
+  });
+});
+
+describe("isTableAvailable", () => {
+  it("returns true when the table has no conflicting reservation", async () => {
+    const table = await testClient.table.create({
+      data: { name: "Table 1", capacity: 4, location: TableLocation.INDOOR },
+    });
+
+    const available = await isTableAvailable(
+      table.id,
+      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30) },
+      testClient
+    );
+
+    expect(available).toBe(true);
+  });
+
+  it("returns false when the table has a conflicting reservation", async () => {
+    const table = await testClient.table.create({
+      data: { name: "Table 1", capacity: 4, location: TableLocation.INDOOR },
+    });
+    await testClient.reservation.create({
+      data: {
+        referenceNumber: "RES-TEST06",
+        tableId: table.id,
+        startTime: new Date(2026, 7, 12, 19, 0),
+        partySize: 4,
+        guestName: "Existing Guest",
+        guestEmail: "existing@example.com",
+        guestPhone: "555-0000",
+      },
+    });
+
+    const available = await isTableAvailable(
+      table.id,
+      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30) },
+      testClient
+    );
+
+    expect(available).toBe(false);
   });
 });
