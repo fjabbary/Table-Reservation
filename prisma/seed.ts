@@ -1,4 +1,4 @@
-import { PrismaClient } from "../src/generated/prisma/client";
+import { PrismaClient, TableLocation } from "../src/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { generateReferenceNumber } from "../src/lib/reference-number";
 
@@ -11,7 +11,18 @@ const DEFAULT_POLICY =
   "Tables are held for 15 minutes past the reservation time. Please contact us if you're running late.";
 const PRIVATE_DINING_POLICY =
   "Private dining rooms require a minimum spend and are held for 15 minutes past the reservation time. Please contact us for cancellations.";
-const PLACEHOLDER_IMAGE = "/placeholder-table.svg";
+
+// One representative photo per location, shared across all tables in that
+// section (Unsplash direct-hotlink URLs, provided by the user).
+const LOCATION_IMAGES: Record<TableLocation, string> = {
+  INDOOR:
+    "https://images.unsplash.com/photo-1658848541818-6cd64f678cba?q=80&w=687&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+  PATIO:
+    "https://plus.unsplash.com/premium_photo-1723491285855-f1035c4c703c?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+  BAR: "https://images.unsplash.com/photo-1497644083578-611b798c60f3?q=80&w=1470&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+  PRIVATE_DINING:
+    "https://images.unsplash.com/photo-1766832255363-c9f060ade8b0?q=80&w=744&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+};
 
 /** Build a Date `daysFromNow` days ahead, at the given local hour:minute. */
 function atTime(daysFromNow: number, hour: number, minute = 0): Date {
@@ -26,7 +37,8 @@ const tableSeeds = [
     name: "Indoor Table 1",
     capacity: 2,
     location: "INDOOR" as const,
-    description: "A cozy two-top tucked in a quiet corner of the main dining room.",
+    description:
+      "A cozy two-top tucked in a quiet corner of the main dining room.",
     features: "Quiet Corner",
     policies: DEFAULT_POLICY,
   },
@@ -34,7 +46,8 @@ const tableSeeds = [
     name: "Indoor Table 2",
     capacity: 4,
     location: "INDOOR" as const,
-    description: "A versatile four-top near the center of the main dining room.",
+    description:
+      "A versatile four-top near the center of the main dining room.",
     features: null,
     policies: DEFAULT_POLICY,
   },
@@ -42,7 +55,8 @@ const tableSeeds = [
     name: "Indoor Table 3",
     capacity: 6,
     location: "INDOOR" as const,
-    description: "A larger table with a view of the street through our front windows.",
+    description:
+      "A larger table with a view of the street through our front windows.",
     features: "Window View",
     policies: DEFAULT_POLICY,
   },
@@ -50,7 +64,8 @@ const tableSeeds = [
     name: "Indoor Table 4",
     capacity: 8,
     location: "INDOOR" as const,
-    description: "Our biggest indoor table, great for groups, with wheelchair-accessible seating.",
+    description:
+      "Our biggest indoor table, great for groups, with wheelchair-accessible seating.",
     features: "Window View,Wheelchair Accessible",
     policies: DEFAULT_POLICY,
   },
@@ -74,7 +89,8 @@ const tableSeeds = [
     name: "Bar Seat 1",
     capacity: 2,
     location: "BAR" as const,
-    description: "Front-row seats at the bar, perfect for a casual bite and a drink.",
+    description:
+      "Front-row seats at the bar, perfect for a casual bite and a drink.",
     features: "Bar View",
     policies: DEFAULT_POLICY,
   },
@@ -90,7 +106,8 @@ const tableSeeds = [
     name: "The Oak Room",
     capacity: 8,
     location: "PRIVATE_DINING" as const,
-    description: "A private room with its own entrance, ideal for celebrations and business dinners.",
+    description:
+      "A private room with its own entrance, ideal for celebrations and business dinners.",
     features: "Private Area,AV Equipment",
     policies: PRIVATE_DINING_POLICY,
   },
@@ -98,7 +115,8 @@ const tableSeeds = [
     name: "The Cedar Room",
     capacity: 12,
     location: "PRIVATE_DINING" as const,
-    description: "Our largest private room, with a dedicated server and wheelchair-accessible entrance.",
+    description:
+      "Our largest private room, with a dedicated server and wheelchair-accessible entrance.",
     features: "Private Area,Wheelchair Accessible",
     policies: PRIVATE_DINING_POLICY,
   },
@@ -112,7 +130,7 @@ async function main() {
   const tables: Record<string, { id: string }> = {};
   for (const seed of tableSeeds) {
     const table = await db.table.create({
-      data: { ...seed, imageUrl: PLACEHOLDER_IMAGE },
+      data: { ...seed, imageUrl: LOCATION_IMAGES[seed.location] },
     });
     tables[seed.name] = table;
   }
@@ -136,7 +154,8 @@ async function main() {
       guestName: "Marco Diaz",
       guestEmail: "marco.diaz@example.com",
       guestPhone: "555-0102",
-      specialRequests: "Celebrating an anniversary, if a window-adjacent spot is possible.",
+      specialRequests:
+        "Celebrating an anniversary, if a window-adjacent spot is possible.",
     },
     {
       table: "Indoor Table 2",
@@ -154,7 +173,8 @@ async function main() {
       guestName: "Priya Shah",
       guestEmail: "priya.shah@example.com",
       guestPhone: "555-0104",
-      specialRequests: "Birthday celebration, would like a small cake brought out after the meal.",
+      specialRequests:
+        "Birthday celebration, would like a small cake brought out after the meal.",
     },
   ];
 
@@ -169,7 +189,9 @@ async function main() {
     });
   }
 
-  console.log(`Seeded ${tableSeeds.length} tables and ${reservationSeeds.length} reservations.`);
+  console.log(
+    `Seeded ${tableSeeds.length} tables and ${reservationSeeds.length} reservations.`
+  );
 }
 
 main()
