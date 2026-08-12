@@ -9,6 +9,7 @@ import {
   type RawSearchParams,
 } from "@/lib/search-params";
 import { LocationBadge } from "@/components/LocationBadge";
+import { ErrorBanner } from "@/components/ErrorBanner";
 
 type TableDetailPageProps = {
   params: Promise<{ id: string }>;
@@ -130,10 +131,7 @@ export default async function TableDetailPage({
 
           <div className="flex flex-col gap-4 border-t border-card-border pt-6">
             {searchContext && !searchContext.stillAvailable && (
-              <p className="rounded-lg bg-red-100 px-4 py-3 text-sm text-red-900 dark:bg-red-900/30 dark:text-red-200">
-                This table was just booked for that time by someone else. Please
-                try a different time or table.
-              </p>
+              <ErrorBanner message="This table was just booked for that time by someone else. Please try a different time or table." />
             )}
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

@@ -6,20 +6,13 @@ import { formatDate, formatTime } from "@/lib/format";
 import { hasSearchParams, parseSearchParams, type RawSearchParams } from "@/lib/search-params";
 import { SearchForm } from "@/components/SearchForm";
 import { LocationBadge } from "@/components/LocationBadge";
+import { ErrorBanner } from "@/components/ErrorBanner";
 import { createReservation } from "./actions";
 
 type ReservePageProps = {
   params: Promise<{ id: string }>;
   searchParams: Promise<RawSearchParams>;
 };
-
-function ErrorBanner({ message }: { message: string }) {
-  return (
-    <p className="rounded-lg bg-red-100 px-4 py-3 text-sm text-red-900 dark:bg-red-900/30 dark:text-red-200">
-      {message}
-    </p>
-  );
-}
 
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
