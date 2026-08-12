@@ -9,6 +9,9 @@ type SearchFormProps = {
   defaultLocation?: string;
   /** Where the form submits to. Defaults to the results page. */
   action?: string;
+  /** Hide the location filter — e.g. when reserving a specific table, whose location is already fixed. */
+  showLocation?: boolean;
+  submitLabel?: string;
 };
 
 export function SearchForm({
@@ -17,6 +20,8 @@ export function SearchForm({
   defaultPartySize = 2,
   defaultLocation = "",
   action = "/search",
+  showLocation = true,
+  submitLabel = "Find a Table",
 }: SearchFormProps) {
   const today = toDateInputValue(new Date());
 
@@ -24,7 +29,9 @@ export function SearchForm({
     <form
       action={action}
       method="get"
-      className="grid grid-cols-1 gap-4 rounded-2xl border border-card-border bg-card p-6 shadow-sm sm:grid-cols-2 lg:grid-cols-5 lg:items-end"
+      className={`grid grid-cols-1 gap-4 rounded-2xl border border-card-border bg-card p-6 shadow-sm sm:grid-cols-2 ${
+        showLocation ? "lg:grid-cols-5" : "lg:grid-cols-4"
+      } lg:items-end`}
     >
       <div className="flex flex-col gap-1.5">
         <label htmlFor="date" className="text-sm font-medium text-muted">
@@ -71,30 +78,32 @@ export function SearchForm({
         />
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <label htmlFor="location" className="text-sm font-medium text-muted">
-          Location
-        </label>
-        <select
-          id="location"
-          name="location"
-          defaultValue={defaultLocation}
-          className="rounded-lg border border-card-border bg-background px-3 py-2 text-foreground outline-none focus:border-accent"
-        >
-          <option value="">Any location</option>
-          {Object.values(TableLocation).map((location) => (
-            <option key={location} value={location}>
-              {formatLocation(location)}
-            </option>
-          ))}
-        </select>
-      </div>
+      {showLocation && (
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="location" className="text-sm font-medium text-muted">
+            Location
+          </label>
+          <select
+            id="location"
+            name="location"
+            defaultValue={defaultLocation}
+            className="rounded-lg border border-card-border bg-background px-3 py-2 text-foreground outline-none focus:border-accent"
+          >
+            <option value="">Any location</option>
+            {Object.values(TableLocation).map((location) => (
+              <option key={location} value={location}>
+                {formatLocation(location)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <button
         type="submit"
         className="rounded-lg bg-accent px-5 py-2.5 font-medium text-accent-foreground transition-opacity hover:opacity-90"
       >
-        Find a Table
+        {submitLabel}
       </button>
     </form>
   );
