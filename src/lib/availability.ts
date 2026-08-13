@@ -4,12 +4,23 @@ import {
   MAX_PARTY_SIZE,
   OPENING_HOUR,
   RESERVATION_DURATION_MINUTES,
+  RESTAURANT_TIMEZONE,
 } from "@/lib/constants";
+import { zonedTimeToUtc } from "@/lib/timezone";
 import type {
   PrismaClient,
   Table,
   TableLocation,
 } from "@/generated/prisma/client";
+
+const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) return false;
+  const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const maxDay = month === 2 && isLeapYear ? 29 : DAYS_IN_MONTH[month - 1];
+  return day <= maxDay;
+}
 
 export type SearchInput = {
   /** "YYYY-MM-DD" */
@@ -32,8 +43,10 @@ export type ValidationResult =
   | { valid: false; error: string };
 
 /**
- * Parses a "YYYY-MM-DD" date and "HH:mm" time into a single local Date.
- * Returns null for malformed input or calendar-invalid dates (e.g. Feb 31).
+ * Parses a "YYYY-MM-DD" date and "HH:mm" time — as read on a clock at the
+ * restaurant (`RESTAURANT_TIMEZONE`), not wherever this code happens to be
+ * running — into the absolute instant it represents. Returns null for
+ * malformed input or calendar-invalid dates (e.g. Feb 31).
  */
 export function combineDateAndTime(date: string, time: string): Date | null {
   const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
@@ -46,27 +59,11 @@ export function combineDateAndTime(date: string, time: string): Date | null {
   const hour = Number(timeMatch[1]);
   const minute = Number(timeMatch[2]);
 
-  if (
-    month < 1 ||
-    month > 12 ||
-    day < 1 ||
-    day > 31 ||
-    hour > 23 ||
-    minute > 59
-  ) {
+  if (!isValidCalendarDate(year, month, day) || hour > 23 || minute > 59) {
     return null;
   }
 
-  const result = new Date(year, month - 1, day, hour, minute, 0, 0);
-  // Date() silently rolls over invalid days (e.g. Feb 31 -> Mar 3) — reject those.
-  if (
-    result.getFullYear() !== year ||
-    result.getMonth() !== month - 1 ||
-    result.getDate() !== day
-  ) {
-    return null;
-  }
-  return result;
+  return zonedTimeToUtc(year, month, day, hour, minute, RESTAURANT_TIMEZONE);
 }
 
 /** The [start, end) window a reservation occupies on its table. */
@@ -115,10 +112,27 @@ export function validateSearchInput(
   }
 
   const { end } = getReservationWindow(start);
-  const openingTime = new Date(start);
-  openingTime.setHours(OPENING_HOUR, 0, 0, 0);
-  const closingTime = new Date(start);
-  closingTime.setHours(CLOSING_HOUR, 0, 0, 0);
+
+  // Same calendar date the guest requested (already validated above),
+  // re-parsed to build the day's opening/closing boundary in restaurant-local
+  // time — NOT via Date.setHours(), which uses the runtime's own timezone.
+  const [, dYear, dMonth, dDay] = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input.date)!;
+  const openingTime = zonedTimeToUtc(
+    Number(dYear),
+    Number(dMonth),
+    Number(dDay),
+    OPENING_HOUR,
+    0,
+    RESTAURANT_TIMEZONE
+  );
+  const closingTime = zonedTimeToUtc(
+    Number(dYear),
+    Number(dMonth),
+    Number(dDay),
+    CLOSING_HOUR,
+    0,
+    RESTAURANT_TIMEZONE
+  );
 
   if (
     start.getTime() < openingTime.getTime() ||

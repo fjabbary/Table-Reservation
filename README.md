@@ -66,6 +66,12 @@ choices (mostly in `src/lib/constants.ts`) rather than hardcoded magic numbers:
 - **Fixed 90-minute reservation duration** for every booking.
 - **Operating hours: 11:00 AM – 10:00 PM** — the full 90-minute window must fit inside
   these hours (last bookable slot is 8:30 PM).
+- **Restaurant timezone: `America/Los_Angeles`** (`RESTAURANT_TIMEZONE` in
+  `src/lib/constants.ts`) — every date/time is parsed and displayed relative to this fixed
+  zone, never the server's or guest's own timezone. This matters in practice: a server
+  deployed somewhere other than Pacific time (e.g. most cloud hosts default to UTC) would
+  otherwise interpret "7:00 PM" as 7:00 PM in its own timezone instead of the restaurant's,
+  silently shifting every booking by several hours.
 - **Max party size: 20** — larger groups are asked to contact the restaurant directly.
 - **Reference numbers** look like `RES-7K3M9P` (6 characters, uppercase, excluding
   visually ambiguous characters like `0`/`O` and `1`/`I`).

@@ -13,3 +13,12 @@ export const CLOSING_HOUR = 22;
 
 /** Sanity cap on a single reservation's party size; larger groups should call in. */
 export const MAX_PARTY_SIZE = 20;
+
+/**
+ * The restaurant's fixed physical timezone. All date/time parsing and
+ * display is anchored to this — never to the server's or guest's own
+ * timezone — so "7:00 PM" means the same absolute instant no matter where
+ * the app happens to be running (a dev laptop vs. a cloud server in a
+ * different timezone are otherwise a real source of bugs here).
+ */
+export const RESTAURANT_TIMEZONE = "America/Los_Angeles";

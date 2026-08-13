@@ -1,6 +1,8 @@
 import { PrismaClient, TableLocation } from "../src/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import { generateReferenceNumber } from "../src/lib/reference-number";
+import { RESTAURANT_TIMEZONE } from "../src/lib/constants";
+import { getZonedParts, zonedTimeToUtc } from "../src/lib/timezone";
 
 const adapter = new PrismaBetterSqlite3({
   url: process.env.DATABASE_URL ?? "file:./dev.db",
@@ -24,12 +26,26 @@ const LOCATION_IMAGES: Record<TableLocation, string> = {
     "https://images.unsplash.com/photo-1766832255363-c9f060ade8b0?q=80&w=744&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
 };
 
-/** Build a Date `daysFromNow` days ahead, at the given local hour:minute. */
+/**
+ * Build a Date `daysFromNow` days ahead of today (at the restaurant), at the
+ * given hour:minute, restaurant-local — not the seed script's own runtime
+ * timezone, which could be anything (a dev laptop vs. a cloud console).
+ */
 function atTime(daysFromNow: number, hour: number, minute = 0): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + daysFromNow);
-  d.setHours(hour, minute, 0, 0);
-  return d;
+  const today = getZonedParts(new Date(), RESTAURANT_TIMEZONE);
+  // Pure calendar-date arithmetic in UTC (no wall-clock/DST ambiguity —
+  // we're just adding days to a Y/M/D, not shifting an actual instant).
+  const targetDay = new Date(Date.UTC(today.year, today.month - 1, today.day));
+  targetDay.setUTCDate(targetDay.getUTCDate() + daysFromNow);
+
+  return zonedTimeToUtc(
+    targetDay.getUTCFullYear(),
+    targetDay.getUTCMonth() + 1,
+    targetDay.getUTCDate(),
+    hour,
+    minute,
+    RESTAURANT_TIMEZONE
+  );
 }
 
 const tableSeeds = [

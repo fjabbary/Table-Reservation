@@ -2,12 +2,20 @@ import { execSync } from "node:child_process";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { PrismaClient, TableLocation } from "@/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { RESTAURANT_TIMEZONE } from "@/lib/constants";
+import { zonedTimeToUtc } from "@/lib/timezone";
 import {
   combineDateAndTime,
   findAvailableTables,
   isTableAvailable,
   validateSearchInput,
 } from "./availability";
+
+/** Builds the same "wall clock at the restaurant" instant the app itself
+ * uses, so these tests pass no matter what timezone actually runs them. */
+function at(year: number, month: number, day: number, hour: number, minute = 0): Date {
+  return zonedTimeToUtc(year, month, day, hour, minute, RESTAURANT_TIMEZONE);
+}
 
 // Isolated SQLite file for this test run, separate from the real dev.db —
 // pushed fresh from the current schema, then wiped between tests.
@@ -38,11 +46,7 @@ describe("combineDateAndTime", () => {
   it("parses a valid date and time", () => {
     const result = combineDateAndTime("2026-08-12", "19:00");
     expect(result).not.toBeNull();
-    expect(result?.getFullYear()).toBe(2026);
-    expect(result?.getMonth()).toBe(7); // 0-indexed
-    expect(result?.getDate()).toBe(12);
-    expect(result?.getHours()).toBe(19);
-    expect(result?.getMinutes()).toBe(0);
+    expect(result?.getTime()).toBe(at(2026, 8, 12, 19, 0).getTime());
   });
 
   it("rejects a calendar-invalid date (Feb 31)", () => {
@@ -53,10 +57,21 @@ describe("combineDateAndTime", () => {
     expect(combineDateAndTime("not-a-date", "19:00")).toBeNull();
     expect(combineDateAndTime("2026-08-12", "7pm")).toBeNull();
   });
+
+  it("interprets times in the restaurant's timezone, not the host runtime's own timezone", () => {
+    // Regression test: this used to be built with `new Date(y, m, d, h, min)`,
+    // which uses whatever timezone the process happens to run in — correct by
+    // coincidence in local dev, silently wrong on a server in a different zone
+    // (e.g. UTC). 7:00 PM PDT (America/Los_Angeles, UTC-7 in August) is
+    // 2:00 AM UTC the next day — this must hold regardless of the machine
+    // (or CI runner) executing this test.
+    const result = combineDateAndTime("2026-08-12", "19:00");
+    expect(result?.toISOString()).toBe("2026-08-13T02:00:00.000Z");
+  });
 });
 
 describe("validateSearchInput", () => {
-  const now = new Date(2026, 7, 10, 9, 0); // Aug 10, 2026, 9:00am
+  const now = at(2026, 8, 10, 9, 0); // Aug 10, 2026, 9:00am at the restaurant
 
   it("accepts a valid future request within operating hours", () => {
     const result = validateSearchInput({ date: "2026-08-12", time: "19:00", partySize: 4 }, now);
@@ -105,7 +120,7 @@ describe("findAvailableTables", () => {
     });
 
     const results = await findAvailableTables(
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30), partySize: 4 },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30), partySize: 4 },
       testClient
     );
 
@@ -122,8 +137,8 @@ describe("findAvailableTables", () => {
 
     const results = await findAvailableTables(
       {
-        start: new Date(2026, 7, 12, 19, 0),
-        end: new Date(2026, 7, 12, 20, 30),
+        start: at(2026, 8, 12, 19, 0),
+        end: at(2026, 8, 12, 20, 30),
         partySize: 2,
         location: TableLocation.INDOOR,
       },
@@ -141,7 +156,7 @@ describe("findAvailableTables", () => {
       data: {
         referenceNumber: "RES-TEST01",
         tableId: table.id,
-        startTime: new Date(2026, 7, 12, 19, 0),
+        startTime: at(2026, 8, 12, 19, 0),
         partySize: 4,
         guestName: "Existing Guest",
         guestEmail: "existing@example.com",
@@ -150,7 +165,7 @@ describe("findAvailableTables", () => {
     });
 
     const results = await findAvailableTables(
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30), partySize: 2 },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30), partySize: 2 },
       testClient
     );
 
@@ -166,7 +181,7 @@ describe("findAvailableTables", () => {
       data: {
         referenceNumber: "RES-TEST02",
         tableId: table.id,
-        startTime: new Date(2026, 7, 12, 18, 30),
+        startTime: at(2026, 8, 12, 18, 30),
         partySize: 4,
         guestName: "Existing Guest",
         guestEmail: "existing@example.com",
@@ -175,7 +190,7 @@ describe("findAvailableTables", () => {
     });
 
     const results = await findAvailableTables(
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30), partySize: 2 },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30), partySize: 2 },
       testClient
     );
 
@@ -191,7 +206,7 @@ describe("findAvailableTables", () => {
       data: {
         referenceNumber: "RES-TEST03",
         tableId: table.id,
-        startTime: new Date(2026, 7, 12, 17, 30),
+        startTime: at(2026, 8, 12, 17, 30),
         partySize: 4,
         guestName: "Existing Guest",
         guestEmail: "existing@example.com",
@@ -200,7 +215,7 @@ describe("findAvailableTables", () => {
     });
 
     const results = await findAvailableTables(
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30), partySize: 2 },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30), partySize: 2 },
       testClient
     );
 
@@ -216,7 +231,7 @@ describe("findAvailableTables", () => {
       data: {
         referenceNumber: "RES-TEST04",
         tableId: table.id,
-        startTime: new Date(2026, 7, 12, 20, 30),
+        startTime: at(2026, 8, 12, 20, 30),
         partySize: 4,
         guestName: "Existing Guest",
         guestEmail: "existing@example.com",
@@ -225,7 +240,7 @@ describe("findAvailableTables", () => {
     });
 
     const results = await findAvailableTables(
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30), partySize: 2 },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30), partySize: 2 },
       testClient
     );
 
@@ -243,7 +258,7 @@ describe("findAvailableTables", () => {
       data: {
         referenceNumber: "RES-TEST05",
         tableId: tableB.id,
-        startTime: new Date(2026, 7, 12, 19, 0),
+        startTime: at(2026, 8, 12, 19, 0),
         partySize: 4,
         guestName: "Existing Guest",
         guestEmail: "existing@example.com",
@@ -252,7 +267,7 @@ describe("findAvailableTables", () => {
     });
 
     const results = await findAvailableTables(
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30), partySize: 2 },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30), partySize: 2 },
       testClient
     );
 
@@ -268,7 +283,7 @@ describe("isTableAvailable", () => {
 
     const available = await isTableAvailable(
       table.id,
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30) },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30) },
       testClient
     );
 
@@ -283,7 +298,7 @@ describe("isTableAvailable", () => {
       data: {
         referenceNumber: "RES-TEST06",
         tableId: table.id,
-        startTime: new Date(2026, 7, 12, 19, 0),
+        startTime: at(2026, 8, 12, 19, 0),
         partySize: 4,
         guestName: "Existing Guest",
         guestEmail: "existing@example.com",
@@ -293,7 +308,7 @@ describe("isTableAvailable", () => {
 
     const available = await isTableAvailable(
       table.id,
-      { start: new Date(2026, 7, 12, 19, 0), end: new Date(2026, 7, 12, 20, 30) },
+      { start: at(2026, 8, 12, 19, 0), end: at(2026, 8, 12, 20, 30) },
       testClient
     );
 
